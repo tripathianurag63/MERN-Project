@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { verifyMail } from "../config/verify-mail.js";
 import { Session } from "../models/session-model.js";
+import { sendOtpMail } from "../config/otp-mail.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -189,3 +190,70 @@ export const loginUser = async (req, res) => {
     
   }
 };
+
+// logout
+export const logout = async (req, res) => {
+  try {
+    const userId = req.userId; // userId will come from -> authMiddleware
+    const sessionPromise = Session.deleteMany({ userId });
+    const userPromise = User.findByIdAndUpdate(userId, { isLoggedIn: false });
+
+    Promise.allSettled([sessionPromise, userPromise])
+      .then(() => {
+        return res.status(200).json({
+          success: true,
+          message: "Logged out successfully",
+        });
+      })
+      .catch((err) => {
+        return res.status(400).json({
+          success: false,
+          message: err,
+        });
+      });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+    });
+  }
+};
+
+// forgotpassword
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    user.otp = otp;
+    user.otpExpiry = expiry;
+    await user.save();
+
+    await sendOtpMail(email, otp);
+    
+    return res.status(200).json({
+      success: true,
+      message: `OTP sent to ${email}`,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+    });
+  }
+};
+
+// verify otp
+
+// confirm password
